@@ -1,0 +1,16 @@
+pypinyin
+numpy
+loguru
+flask
+flask_cors
+pandas
+cn2an
+gunicorn
+eventlet==0.30.2 
+transformers>=4.4.2
+zhon
+synonyms
+ltp
+ltp-core
+ltp-extension
+pymongo
