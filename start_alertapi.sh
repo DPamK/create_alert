@@ -1,0 +1,1 @@
+gunicorn --config=config/gunicorn_config.py create_AlertAPI:app

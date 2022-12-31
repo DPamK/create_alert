@@ -4,7 +4,6 @@ from loguru import logger
 import cn2an
 from dictfiliter import dictfiliter,post_with_databese
 from check_location import check_location
-from config import corrector_config as cfg
 
 class total_filter():
     '''
@@ -19,6 +18,8 @@ class total_filter():
         self.need_zhfiliter = cfg.zhfiliter
         self.need_dictfiliter = cfg.dictfiliter
         self.need_afterfiliter = cfg.afterfiliter
+        self.need_afterProcess = cfg.afterProcess
+        
 
         #初始化数据库
         self.filiter_dbpath=cfg.filiter_dbpath
@@ -33,10 +34,10 @@ class total_filter():
             self.dfiliter = dictfiliter(cfg.filiter_dbpath)
 
 
-    def filiter_alerts(self,input_content):
+    def filiter_alerts(self):
         total_alert=[]
-        alerts=input_content['alerts']
-        sentences=input_content['data']
+        alerts=self.alerts
+        sentences=self.data
         for sentence,item in zip(sentences,alerts):
             res = []  # [{}],返回形式可能需要修改
             oritext=sentence['origin']
@@ -47,11 +48,10 @@ class total_filter():
                     alertmessage = alert['alertMessage']
                     logger.warning(f'delete alert {alertmessage}')
             total_alert.append(res)
-        model_json={}
-        model_json['alerts']=total_alert
-        model_json['errCode']=0
-        model_json['"errMsg']=''
-        return model_json
+        
+        self.alerts = total_alert
+
+        return True
 
     def filiter(self,alert,oritext):
         # import pdb;pdb.set_trace()
@@ -429,34 +429,102 @@ class total_filter():
                     else:
                         sentence_errors.remove(alert_error)
 
-        # return model_json
+    def de_question(self,alert):
+        if alert['sourceText'] in ['的','地','得'] and alert['replaceText'] in ['的','地','得']:
+            return True
+        else:
+            return False
+    
+    def fix_deQuestion(self):
+        def fix_deProcess(alert,cws,pos):
+            start = alert['start']
+            index = -1
+            num = 0
+            for i in range(len(cws)):
+                if num == start:
+                    index = i
+                    break
+                else:
+                    num += len(cws[i])
+            if index <= 0:
+                return None
+            elif index +1 >= len(cws):
+                alert['replaceText'] = '的'
+                return alert
+            else:
+                if pos[index-1] in ['a','b','d'] and pos[index+1] in ['n','nd','nh','ni','nl','ns','nt','nz']:
+                    replace = '的'
+                elif pos[index-1] == 'v' and pos[index+1] in ['a','b','d']:
+                    replace = '得'
+                elif pos[index+1] == 'v' :
+                    replace = '地'
+                else:
+                    replace = ''
+                if replace == '':
+                    return None
+                elif replace == alert['sourceText']:
+                    return None
+                else:
+                    alert['replaceText'] = replace
+                    return alert
+        total_alert=[]
+        for sentence_errors,item in zip(self.alerts,self.data):
+            res = []
+            for alert_error in sentence_errors:
+                if self.de_question(alert=alert_error):
+                    cws = item['origin_cws']
+                    pos = item['origin_pos']
+                    temp = fix_deProcess(alert_error,cws,pos)
+                    if temp != None:
+                        res.append(temp)
+                else:
+                    res.append(alert_error)
+            total_alert.append(res)
+        self.alerts = total_alert
+
+    def clean_data(self):
+        datas = self.data
+        res = []
+        for item in datas:
+            temp = {
+                "originText":item['origin'],
+                "output":item['output']
+            }
+            res.append(temp)
+        self.data = res
+        return True
 
     def get_alerts(self):
+
         self.switch()
+        self.clean_data()
         model_json={}
         model_json['alerts']=self.alerts
+        model_json['data'] = self.data
         model_json['errCode']=0
         model_json['errMsg']=''
         return model_json
 
     def switch(self):
-        self.post_disable_repeat()
-        self.post_disable_location()
-        self.post_disable_from_database()
-        self.post_disable_context()
-        self.post_disable_gongwenguifan()
-        self.post_disable_space_after_puncs()
-        self.post_disable_space()
-        self.post_disable_number()
-        self.post_disable_bookname()
-        self.post_disable_date()
-        self.post_disable_rongyu()
-        self.post_disable_low()
-        self.post_disable_reverse_words()
-        self.post_disable_empty_replace_text()
-        self.post_disable_remove_error_quotes()
-        self.post_enable_mix_pair_symbol_detection()
-        # print(self.get_alerts())
+        self.filiter_alerts()
+        self.fix_deQuestion()
+        if self.need_afterProcess:
+            self.post_disable_repeat()              #处理重复alert
+            self.post_disable_location()            #针对行政区划的过滤
+            self.post_disable_from_database()       #对于需要从数据库中过滤
+            self.post_disable_context()             #无意义修改词
+            self.post_disable_gongwenguifan()       #过滤公文规范
+            self.post_disable_space_after_puncs()   #修改前后标点相同
+            self.post_disable_space()               #中间有空格
+            self.post_disable_number()              #阿拉伯数字转化为汉字
+            self.post_disable_bookname()            #把书名号错误，取消处理
+            self.post_disable_date()                #把日期错误，取消处理
+            self.post_disable_rongyu()              #冗余字词错误
+            self.post_disable_low()                 #法律名称不能带有书名号
+            self.post_disable_reverse_words()       #词序颠倒
+            self.post_disable_empty_replace_text()  #过滤没有replaceText的alert
+            self.post_disable_remove_error_quotes() #过滤错误的quotes
+            self.post_enable_mix_pair_symbol_detection()#成对的标点符号
 
 
 if __name__ == '__main__':
@@ -549,8 +617,8 @@ if __name__ == '__main__':
     "errCode": 0,
     "errMsg": ""
 }
-    filiter=total_filter(input_content=inputCont,cfg=cfg)
-    print(filiter.get_alerts())
+    # filiter=total_filter(input_content=inputCont,cfg=cfg)
+    # print(filiter.get_alerts())
 
 
 

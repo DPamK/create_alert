@@ -8,7 +8,7 @@ from flask import Flask,request
 from alert_format import creat_alert_item
 from transfer import deal_with_alert
 from total_filter import total_filter
-from config import corrector_config as cfg
+from config import alert_config as cfg
 
 logger.add("log/ltp_log.log")
 app = Flask(__name__)
@@ -137,6 +137,9 @@ def catch_alert():
         fliter_request = request_info['fliter']
         if fliter_request == "Normal":
             fliter_cfg = cfg
+        elif fliter_request == "OnePart":
+            fliter_cfg = cfg
+            fliter_cfg.afterProcess = False
     else:
         fliter_cfg = None
     # 数据收集
@@ -153,6 +156,7 @@ def catch_alert():
         alert_info = filiter.get_alerts()
 
     if result_style == 'correct':
+        
         return alert_info
     elif result_style == 'transfer':
         result = deal_with_alert(alert_info['alerts'])
