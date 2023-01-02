@@ -1,59 +1,35 @@
-import os
-from ltp import LTP
+from LAC import LAC
 from loguru import logger
 import difflib
 import time
-import math
 from flask import Flask,request
 from alert_format import creat_alert_item
 from transfer import deal_with_alert
 from total_filter import total_filter
 from config import alert_config as cfg
+from word_cut import lac_cwspos,ltp_cwspos
 
-logger.add("log/ltp_log.log")
+logger.add("log/alert_log.log")
 app = Flask(__name__)
 
-# ltp = LTP("LTP/base1")
-ltp = LTP("LTP/legacy")
-
-def ltp_cws_pos(alltexts):
-    data = alltexts
-    listMaxNum = 100
-    batch_num = math.ceil(len(data)/listMaxNum)
-    if len(data) > listMaxNum:
-        result_cws = []
-        result_pos = []
-        i = 0
-        while i < batch_num:
-            if (i+1)*listMaxNum >= len(data):
-                temp = data[i*listMaxNum:]
-            else:
-                temp = data[i*listMaxNum:(i+1)*listMaxNum]
-            i += 1
-            s = ltp.pipeline(temp,tasks=['cws','pos'])
-            result_cws.extend(s.cws)
-            result_pos.extend(s.pos)
-    else:
-        result = ltp.pipeline(data,tasks=['cws','pos'])
-        result_cws = result.cws
-        result_pos = result.pos
-    return result_cws,result_pos
-
+lac = LAC(mode='lac')
 
 def participle(sources,predicts):
+    alltexts = sources+predicts
+    lsource = len(sources)
     try:
-        alltexts = sources+predicts
-        allparts_cws,allparts_pos = ltp_cws_pos(alltexts)
-        source_cws = allparts_cws[0:len(sources)]
-        source_pos = allparts_pos[0:len(sources)]
-        predict_cws = allparts_cws[len(sources):]
-        predict_pos = allparts_pos[len(sources):]
-        return source_cws,predict_cws,0,'',source_pos
+        allparts_cws,allparts_pos = ltp_cwspos(alltexts)
+        
     except:
         logger.warning('LTP can not run.')
-        source = [list(item) for item in sources]
-        predict = [list(item) for item in predicts]
-        return source,predict,1,'LTP can not run.',None
+    allinfo = lac.run(alltexts)
+    allparts_cws,allparts_pos = lac_cwspos(allinfo)
+
+    source_cws = allparts_cws[:lsource]
+    source_pos = allparts_pos[:lsource]
+    predict_cws = allparts_cws[lsource:]
+    predict_pos = allparts_pos[lsource:]    
+    return source_cws,predict_cws,0,'',source_pos
 
 def list2str(strlist):
     res = ''.join(strlist)
