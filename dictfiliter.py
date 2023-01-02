@@ -1,5 +1,6 @@
 import sqlite3
 import re
+import difflib
 
 
 def search_type(connect,table,type=None):
@@ -10,6 +11,15 @@ def search_type(connect,table,type=None):
         cur.execute('SELECT * FROM blank_words WHERE type= ?',(type,))
     res = cur.fetchall()
     return res
+
+def search_sentitiveWord(connect):
+    cur = connect.cursor()
+    cur.execute('select word from sentitive_words')
+    res = cur.fetchall()
+    words = []
+    for item in res:
+        words.append(item[0])
+    return words
 
 class dictfiliter():
     def __init__(self,filiter_dbpath) -> None:
@@ -47,8 +57,17 @@ class dictfiliter():
                 self.insertDict[ori].append(fix)
             else:
                 self.insertDict[ori] = [fix]
+        # 初始化sentitiveWord
+        self.sentitiveWord = search_sentitiveWord(connect)
         connect.close()
 
+    def filiter_SentitiveWord(self,alert):
+        for senword in self.sentitiveWord:
+            if senword in alert['sourceText']:
+                if alert['alertType'] >= 3 and senword not in alert['replaceText']:
+                    return True
+        return False
+        
 
     def filterName(self,alert):
         source = alert['sourceText']
@@ -80,7 +99,9 @@ class dictfiliter():
         # alert 中 alertType : 4 为替换replace； 3为删除delete； 2为添加insert
         if self.filterName(alert):
             return True
-
+        elif self.filiter_SentitiveWord(alert):
+            return True
+            
         if kind == 4:
             return self.filterReplace(alert)
         elif kind == 3:
@@ -170,32 +191,39 @@ class post_with_databese():
             sentence=item['origin']
             origin_cws=item['origin_cws']
             origin_pos=item['origin_pos']
+            num = 0
             names = self.extract_name(sentence=sentence,origin_cws=origin_cws,origin_pos=origin_pos)
             for name, start, end in names:
                 left_border = start - 10 if start - 10 > 0 else 0
                 right_border = end + 4
-                errorType, message, hit_position, replaceText =self.judge_exit(name, sentence[left_border:right_border],
-                                                                           self.leader_name_set,
-                                                                           self.leader_position_set, self.leader_position_dict)
+                try:
+                    errorType,error_type, message, hit_position, replaceText =self.judge_exit(name, sentence[left_border:right_border],
+                                                                            self.leader_name_set,
+                                                                            self.leader_position_set, self.leader_position_dict)
 
-                for alert_error in list(sentence_errors):
-                    if name in str(alert_error['sourceText']).strip() and alert_error['errorType'] != errorType:
-                        sentence_errors.remove(alert_error)
-                    if hit_position != '' and hit_position in alert_error['sourceText']:
-                        if name in alert_error['sourceText'] and name in alert_error['replaceText']:
-                            if alert_error in sentence_errors:
-                                sentence_errors.remove(alert_error)
+                    for alert_error in list(sentence_errors):
+                        if name in str(alert_error['sourceText']).strip() and alert_error['errorType'] != errorType:
+                            sentence_errors.remove(alert_error)
+                        if hit_position != '' and hit_position in alert_error['sourceText']:
+                            if name in alert_error['sourceText'] and name in alert_error['replaceText']:
+                                if alert_error in sentence_errors:
+                                    sentence_errors.remove(alert_error)
 
-                if replaceText != "":  # 领导人名字写错的时候为空
-                    new_item = creat_name_item(name, start, end, errorType, message, replaceText)
-                    for alert_error in sentence_errors:
-                        if name in alert_error['sourceText'] and "，" in alert_error["sourceText"]:  # sourceText中有人名和逗
-                            alert_error["alertMessage"] = alert_error["alertMessage"].replace(alert_error['sourceText'],
-                                                                                              name)
-                            alert_error["sourceText"] = name
-                        elif name == alert_error['sourceText']:  # sourceText和人名完全相等
-                            alert_error = new_item
-                    sentence_errors.append(new_item)
+                    if replaceText != "":  # 领导人名字写错的时候为空
+                        new_item = self.creat_name_item(name, start, end, errorType,error_type, message, replaceText)
+                        for alert_error in sentence_errors:
+                            if name in alert_error['sourceText'] and "，" in alert_error["sourceText"]:  # sourceText中有人名和逗
+                                alert_error["alertMessage"] = alert_error["alertMessage"].replace(alert_error['sourceText'],
+                                                                                                name)
+                                alert_error["sourceText"] = name
+                            elif name == alert_error['sourceText']:  # sourceText和人名完全相等
+                                alert_error = new_item
+                        sentence_errors.append(new_item)
+
+                except Exception as ex:
+                    print(ex)
+                    num += 1
+                    print(num)
 
         # return model_json
 
@@ -214,13 +242,14 @@ class post_with_databese():
         return namelist
 
 
-    def creat_name_item(name, start, end, errorType, message, replaceText):
+    def creat_name_item(self,name, start, end, errorType,error_type, message, replaceText):
         res = {
             'advancedTip': True,
             'message': message,
             'alertType': 10,
             'end': end,
             'errorType': errorType,
+            'error_type':error_type,
             'replaceText': replaceText,
             'sourceText': name,
             'start': start
@@ -228,7 +257,7 @@ class post_with_databese():
         return res
 
 
-    def judge_exit(name_o, string_before_name, name_set, position_set, leader_position_dict):
+    def judge_exit(self,name_o, string_before_name, name_set, position_set, leader_position_dict):
         leader_position_list = leader_position_dict[name_o] if name_o in name_set else []
         hit_position = ''
         replaceText = ''
@@ -239,23 +268,27 @@ class post_with_databese():
                 for leader_position in leader_position_list:
                     if leader_position in string_before_name:  # 句子前面的职务正确
                         errorType = 667
+                        error_type = '-'
                         message = "领导职务，请谨慎查验"
                         replaceText = name_o
-                        return errorType, message, hit_position, replaceText
+                        return errorType,error_type, message, hit_position, replaceText
                 if len(leader_position_list) > 0:  # 职务不正确：李克强总书记
                     errorType = 201
+                    error_type = "2-1"
                     message = "职务可能有误，建议修改为:" + '、'.join(set(leader_position_list))
                     replaceText = name_o
-                    return errorType, message, hit_position, replaceText
+                    return errorType,error_type,message, hit_position, replaceText
                 elif len(leader_position_list) == 0:  # 人名不正确：习进平总书记
                     erroType = 201
+                    error_type = "2-2"
                     message = "领导人名可能有误"
 
-                    return erroType, message, hit_position, replaceText
+                    return erroType,error_type, message, hit_position, replaceText
         errorType = 667  # 句子没有职务：张海波
+        error_type = "-"
         message = "人名，请谨慎查验"
         replaceText = name_o
-        return errorType, message, hit_position, replaceText
+        return errorType,error_type, message, hit_position, replaceText
 
 
     def post_disable_by_black_words(self):
@@ -298,7 +331,7 @@ class post_with_databese():
     def post_disable_idioms(self):
         for sentence_errors in self.alerts:
             for alert_error in list(sentence_errors):
-                if alert_error['sourceText'] in self.idioms and alert_error['replaceText'] in idioms:
+                if alert_error['sourceText'] in self.idioms and alert_error['replaceText'] in self.idioms:
                     sentence_errors.remove(alert_error)
         # return model_json
 
@@ -315,8 +348,10 @@ class post_with_databese():
         return self.alerts
 
 
-
-
+if __name__=="__main__":
+    connect = sqlite3.connect('database/filiter_db.db')
+    res = search_sentitiveWord(connect=connect)
+    print(res)
 
 
 

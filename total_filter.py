@@ -302,7 +302,8 @@ class total_filter():
                         if not part.isdigit():
                             is_digit = False
                     if is_digit:
-                        sentence_errors.remove(alert_error)
+                        #sentence_errors.remove(alert_error)
+                        continue
         # return model_json
 
     #字词错误
@@ -476,6 +477,7 @@ class total_filter():
                     pos = item['origin_pos']
                     temp = fix_deProcess(alert_error,cws,pos)
                     if temp != None:
+                        temp['error_type'] = "1-12"
                         res.append(temp)
                 else:
                     res.append(alert_error)

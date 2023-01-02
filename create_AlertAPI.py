@@ -39,7 +39,6 @@ def ltp_cws_pos(alltexts):
         result_pos = result.pos
     return result_cws,result_pos
 
-    
 
 def participle(sources,predicts):
     try:
@@ -63,6 +62,7 @@ def list2str(strlist):
 def create_alerts(sources,predicts):
     alerts = []
     datas = []
+    error_type = ""
     inputs,outputs,errCode,errMsg,source_poss = participle(sources,predicts)
     for source,output,predict,source_pos in zip(inputs,outputs,predicts,source_poss):
         alert = []
@@ -88,6 +88,7 @@ def create_alerts(sources,predicts):
                     alertMessage = f"建议删除“{sourceText}”"
                     alertType = 3
                     errorType = 5
+                    error_type = "1-4"
                 elif type == 'insert':
                     alertMessage = f"建议添加“{replaceText}”"
                     #判断添加位置，抽取添加字符的位置，和原文进行比较
@@ -105,7 +106,8 @@ def create_alerts(sources,predicts):
                         start = sum(textlenth[:ori_pos_begin-1])
                         alertType = 2
                     errorType = 5
-                alert_item = creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText, start, start+len(sourceText)-1)
+                    error_type = "1-5"
+                alert_item = creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText, start, start+len(sourceText)-1,error_type)
                 alert.append(alert_item)  
         oritextltp = "".join(source)
         alerts.append(alert)
@@ -127,7 +129,7 @@ def create_alerts(sources,predicts):
         'errMsg':errMsg
     }
     return result
-
+# import pdb;pdb.set_trace()
 @app.route('/alert',methods=['POST'])
 def catch_alert():
     # 设定请求需求
@@ -140,6 +142,8 @@ def catch_alert():
         elif fliter_request == "OnePart":
             fliter_cfg = cfg
             fliter_cfg.afterProcess = False
+        elif fliter_request == "":
+            fliter_cfg = None
     else:
         fliter_cfg = None
     # 数据收集

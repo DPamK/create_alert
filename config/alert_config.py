@@ -3,7 +3,7 @@
 
 # 过滤器设置
 filiter_dbpath = 'database/filiter_db.db'
-zhfiliter = True    
+zhfiliter = True
 dictfiliter = True
 afterfiliter = True
 

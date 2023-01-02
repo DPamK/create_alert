@@ -296,6 +296,7 @@ class check_location():
             'alertType': 4,
             'end': start + len(text) - 1,
             'errorType': 202,
+            'error_type':'4-2',
             'replaceText': self.revise_202(text) if fix_advise is True else revise,
             'sourceText': text,
             'start': start
@@ -353,6 +354,10 @@ class check_location():
             if province['province'] == text:
                 return True
         return False
+
+    def location_detected(self):
+        for alerts,item in zip(self.alerts,self.data):
+            pass
 
     def switch(self):
         self.post_disable_local()
