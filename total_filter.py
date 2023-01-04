@@ -453,7 +453,7 @@ class total_filter():
                 alert['replaceText'] = '的'
                 return alert
             else:
-                if pos[index-1] in ['a','b','d'] and pos[index+1] in ['n','nd','nh','ni','nl','ns','nt','nz']:
+                if pos[index-1] in ['a','b','d','n','nd','nh','ni','nl','ns','nt','nz'] and pos[index+1] in ['n','nd','nh','ni','nl','ns','nt','nz']:
                     replace = '的'
                 elif pos[index-1] == 'v' and pos[index+1] in ['a','b','d']:
                     replace = '得'

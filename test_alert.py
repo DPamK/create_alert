@@ -1,28 +1,15 @@
 import requests
 import json
-
-
+from create_AlertAPI import create_alerts
+from total_filter import total_filter
+from config import alert_config as cfg
+        
 
 if __name__ == '__main__':
-
-    url = "47.102.201.236:18080/alert"
-
-    payload = json.dumps({
-      "data": [
-        {
-          "originText": "聪明得小孩",
-          "correctText": "聪明的小孩"
-        }
-      ],
-      "way": {
-        "style": "correct",
-        "fliter": "Normal"
-      }
-    })
-    headers = {
-      'Content-Type': 'application/json'
-    }
-
-    response = requests.request("POST", url, headers=headers, data=payload)
-
-    print(response.text)
+    origin = ['小孩得玩具好贵。']
+    output = ['小孩的玩具好贵。']
+    alert_info = create_alerts(origin,output)
+    filiter = total_filter(cfg=cfg,input_content=alert_info)
+    res = filiter.get_alerts()
+    print(res)
+    
