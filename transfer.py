@@ -49,7 +49,12 @@ def deal_with_alert(fixed):
                 output_alert['start_index'] = alert['start']
                 output_alert['end_index'] = alert['end']
                 output_alert['advise'] = alert['advancedTip']
-                output_alert['error_type'] = error_map[alert['errorType']]
+                # output_alert['error_type'] = error_map[alert['errorType']]
+                #目前有些函数没有二级映射，先这样写,统一成str类型，后期统一了再改
+                if "error_type" in alert.keys():
+                    output_alert['error_type'] = alert['error_type']
+                elif "errorType" in alert.keys():
+                    output_alert['error_type'] =str(error_map[alert['errorType']])
                 output_alert_list.append(output_alert)
         output_list.append(output_alert_list)
     return output_list

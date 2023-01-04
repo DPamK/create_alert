@@ -1,60 +1,35 @@
-import os
-from ltp import LTP
+from LAC import LAC
 from loguru import logger
 import difflib
 import time
-import math
 from flask import Flask,request
 from alert_format import creat_alert_item
 from transfer import deal_with_alert
 from total_filter import total_filter
-from config import corrector_config as cfg
+from config import alert_config as cfg
+from word_cut import lac_cwspos,ltp_cwspos
 
-logger.add("log/ltp_log.log")
+logger.add("log/alert_log.log")
 app = Flask(__name__)
 
-# ltp = LTP("LTP/base1")
-ltp = LTP("LTP/legacy")
-
-def ltp_cws_pos(alltexts):
-    data = alltexts
-    listMaxNum = 100
-    batch_num = math.ceil(len(data)/listMaxNum)
-    if len(data) > listMaxNum:
-        result_cws = []
-        result_pos = []
-        i = 0
-        while i < batch_num:
-            if (i+1)*listMaxNum >= len(data):
-                temp = data[i*listMaxNum:]
-            else:
-                temp = data[i*listMaxNum:(i+1)*listMaxNum]
-            i += 1
-            s = ltp.pipeline(temp,tasks=['cws','pos'])
-            result_cws.extend(s.cws)
-            result_pos.extend(s.pos)
-    else:
-        result = ltp.pipeline(data,tasks=['cws','pos'])
-        result_cws = result.cws
-        result_pos = result.pos
-    return result_cws,result_pos
-
-    
+lac = LAC(mode='lac')
 
 def participle(sources,predicts):
+    alltexts = sources+predicts
+    lsource = len(sources)
     try:
-        alltexts = sources+predicts
-        allparts_cws,allparts_pos = ltp_cws_pos(alltexts)
-        source_cws = allparts_cws[0:len(sources)]
-        source_pos = allparts_pos[0:len(sources)]
-        predict_cws = allparts_cws[len(sources):]
-        predict_pos = allparts_pos[len(sources):]
-        return source_cws,predict_cws,0,'',source_pos
+        allparts_cws,allparts_pos = ltp_cwspos(alltexts)
+        
     except:
         logger.warning('LTP can not run.')
-        source = [list(item) for item in sources]
-        predict = [list(item) for item in predicts]
-        return source,predict,1,'LTP can not run.',None
+        allinfo = lac.run(alltexts)
+        allparts_cws,allparts_pos = lac_cwspos(allinfo)
+
+    source_cws = allparts_cws[:lsource]
+    source_pos = allparts_pos[:lsource]
+    predict_cws = allparts_cws[lsource:]
+    predict_pos = allparts_pos[lsource:]    
+    return source_cws,predict_cws,0,'',source_pos
 
 def list2str(strlist):
     res = ''.join(strlist)
@@ -63,6 +38,7 @@ def list2str(strlist):
 def create_alerts(sources,predicts):
     alerts = []
     datas = []
+    error_type = ""
     inputs,outputs,errCode,errMsg,source_poss = participle(sources,predicts)
     for source,output,predict,source_pos in zip(inputs,outputs,predicts,source_poss):
         alert = []
@@ -88,6 +64,7 @@ def create_alerts(sources,predicts):
                     alertMessage = f"建议删除“{sourceText}”"
                     alertType = 3
                     errorType = 5
+                    error_type = "1-4"
                 elif type == 'insert':
                     alertMessage = f"建议添加“{replaceText}”"
                     #判断添加位置，抽取添加字符的位置，和原文进行比较
@@ -105,7 +82,8 @@ def create_alerts(sources,predicts):
                         start = sum(textlenth[:ori_pos_begin-1])
                         alertType = 2
                     errorType = 5
-                alert_item = creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText, start, start+len(sourceText)-1)
+                    error_type = "1-5"
+                alert_item = creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText, start, start+len(sourceText)-1,error_type)
                 alert.append(alert_item)  
         oritextltp = "".join(source)
         alerts.append(alert)
@@ -127,7 +105,7 @@ def create_alerts(sources,predicts):
         'errMsg':errMsg
     }
     return result
-
+# import pdb;pdb.set_trace()
 @app.route('/alert',methods=['POST'])
 def catch_alert():
     # 设定请求需求
@@ -137,6 +115,11 @@ def catch_alert():
         fliter_request = request_info['fliter']
         if fliter_request == "Normal":
             fliter_cfg = cfg
+        elif fliter_request == "OnePart":
+            fliter_cfg = cfg
+            fliter_cfg.afterProcess = False
+        elif fliter_request == "":
+            fliter_cfg = None
     else:
         fliter_cfg = None
     # 数据收集
@@ -153,6 +136,7 @@ def catch_alert():
         alert_info = filiter.get_alerts()
 
     if result_style == 'correct':
+        
         return alert_info
     elif result_style == 'transfer':
         result = deal_with_alert(alert_info['alerts'])

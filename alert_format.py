@@ -23,7 +23,7 @@ def judgeadvice(sourceText,replaceText):
         advancedTip = str(similer)
     return advancedTip
 
-def creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText, ori_pos_begin, ori_pos_end):
+def creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText, ori_pos_begin, ori_pos_end,error_type):
     if alertType == 4:
         advancedTip = judgeadvice(sourceText,replaceText)
     elif alertType == 1:
@@ -36,10 +36,10 @@ def creat_alert_item(alertMessage, alertType, errorType, replaceText, sourceText
         advancedTip = str(True)
     
     alert_item = item(advancedTip, alertMessage, alertType, errorType, replaceText, sourceText,
-                                    ori_pos_begin, ori_pos_end)
+                                    ori_pos_begin, ori_pos_end,error_type)
     return  alert_item
 
-def item(advancedTip, alertMessage, alertType, errorType, replaceText, sourceText, ori_pos_begin, ori_pos_end):
+def item(advancedTip, alertMessage, alertType, errorType, replaceText, sourceText, ori_pos_begin, ori_pos_end,error_type):
     res = {
         'advancedTip': advancedTip,
         'alertMessage': alertMessage,
@@ -49,5 +49,6 @@ def item(advancedTip, alertMessage, alertType, errorType, replaceText, sourceTex
         'sourceText': sourceText,
         'start': ori_pos_begin,
         'end': ori_pos_end,
+        'error_type':error_type
     }
     return res

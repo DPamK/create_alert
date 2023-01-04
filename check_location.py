@@ -5,14 +5,16 @@ class check_location():
         self.data=data
         self.alerts=alerts
         self.location_structure=location_structure
+        self.location_hashmap = self.create_gov_level_hash()
 
     def post_enable_location(self):
         """
-            根据原文查找202错误：对行政区划的层级进行判断处理，
-            分析主要的问题是：检测出模型未检出的202错误，并提示。
-            :param model_json:
-            :return:
-            """
+        需要根据词性重构一下更合理
+        根据原文查找202错误：对行政区划的层级进行判断处理，
+        分析主要的问题是：检测出模型未检出的202错误，并提示。
+        :param model_json:
+        :return:
+        """
         p = re.compile(r"[\u4e00-\u9fa5]{1,4}[省市县区]")
         p0 = re.compile(r"[\u4e00-\u9fa5]+省((?!市).)*区")
         location_hashmap = self.create_gov_level_hash()
@@ -34,6 +36,8 @@ class check_location():
                         if not is_same_location_error_exist(text, self.sentence_error):
                             start = sentence.find(text)
                             ##这里没太看懂？？
+                            # 尴尬的是我自己也没太弄明白我在这干啥T^T
+                            # 好像有几种不同类型的错误，我在后面重构了基于词性的代码
                             item = self.createAlert(text, start, revise=self.location_structure,message='行政区划错误',fix_advise=True)
                             sentence_error.append(item)
                     else:
@@ -296,6 +300,7 @@ class check_location():
             'alertType': 4,
             'end': start + len(text) - 1,
             'errorType': 202,
+            'error_type':'4-2',
             'replaceText': self.revise_202(text) if fix_advise is True else revise,
             'sourceText': text,
             'start': start
@@ -353,6 +358,64 @@ class check_location():
             if province['province'] == text:
                 return True
         return False
+
+    def location_detected(self):
+        """
+        需要根据词性重构一下更合理
+        根据原文查找202错误：对行政区划的层级进行判断处理，
+        分析主要的问题是：检测出模型未检出的202错误，并提示。
+        :param model_json:
+        :return:
+        """
+        
+        for item, alert in zip(self.data,self.alerts):
+            # 1.抽取地理名
+            location_item = []
+            for index,word,ner in enumerate(zip(item['origin_cws'],item['origin_pos'])):
+                if ner == 'nl':
+                    location_item.append([index,word])
+            # 2.将相关的地理名归到一起
+            location_list = []
+            temp = []
+            for i in len(location_item):
+                if len(temp)==0:
+                    temp.append(location_item[i])
+                else:
+                    if temp[-1][0] + 1 == location_item[i][0]:
+                        temp.append(location_item[i])
+                    else:
+                        location_list.append(temp)
+                        temp = [location_item[i]]
+            # 3.根据分割好的地理名，分别检查是否有错误
+            for location in location_list:
+                # 检查是否有地名错误
+                if not self.check_location_name(location):
+                        source,start = self.get_alert_info(location,item)
+                        revise = ""
+                        message = f"{source}地名可能有误"
+                        t = self.createAlert(source,start,message,revise)
+                        alert.append(t)
+                else:
+                    # 检查是否存在XX省XX区错误
+                    if len(location) == 2:
+                        siteone = location[0]
+                        sitetwo = location[1]
+
+    def get_location_level(self,location_name):
+
+        pass
+    def get_alert_info(self,location,item):
+        source = ''.join([temp[1] for temp in location])
+        start_index = location[0][0]
+        start = len(''.join(item['origin_cws'][:start_index]))
+        return source,start         
+    
+    def check_location_name(self,location):
+        return True
+
+
+            
+
 
     def switch(self):
         self.post_disable_local()
