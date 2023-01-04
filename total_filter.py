@@ -291,20 +291,45 @@ class total_filter():
         :param model_json:
         :return:
         """
-        for sentence_errors in self.alerts:
-            for alert_error in list(sentence_errors):
-                if alert_error['errorType'] != 2:
-                    continue
-                s_parts = alert_error['sourceText'].split('.')
-                if len(s_parts) <= 2:
-                    is_digit = True
-                    for part in s_parts:
-                        if not part.isdigit():
-                            is_digit = False
-                    if is_digit:
-                        #sentence_errors.remove(alert_error)
-                        continue
-        # return model_json
+        res = []
+        for item, sentence_errors in zip(self.data,self.alerts):
+            input_sentence = item['origin']
+            date_regular = r"[0-9]*[0-9]+[月][0-9]*[0-9]+[日]*"
+            date_search = re.search(date_regular,input_sentence)
+            start_end = date_search.span()
+            start = start_end[0]
+            end = start_end[1]
+            date_search = date_search.group(0)
+            #print(start_end)
+            alert = {}
+            month_dict = {1:31,2:29,3:31,4:30,5:31,6:30,7:31,8:31,9:30,10:31,11:30,12:31}
+            month = int(re.match(r"[0-9]*[0-9]+[月]",date_search).group(0).strip('月'))
+            if month>12:
+                alert["advancedTip"] = "True"
+                alert["alertMessage"] = "日期存在问题"
+                alert["alertType"] = 16
+                alert["end"] = end
+                alert["errorType"] = 101
+                alert["error_type"] = "3-3"
+                alert["replaceText"] = ""
+                alert["sourceText"] = date_search
+                alert["start"] = start
+            day = int(re.search("[0-9]*[0-9]+日+",date_search).group(0).strip('日'))
+            if len(alert)==0 and month in month_dict.keys() and day>month_dict[month]:
+                alert["advancedTip"] = "True"
+                alert["alertMessage"] = "日期存在问题"
+                alert["alertType"] = 16
+                alert["end"] = end
+                alert["errorType"] = 101
+                alert["error_type"] = "3-3"
+                alert["replaceText"] = ""
+                alert["sourceText"] = date_search
+                alert["start"] = start
+            if len(alert)>0:
+                sentence_errors.append(alert)
+            res.append(sentence_errors)
+        self.alerts = res
+            
 
     #字词错误
     def post_disable_rongyu(self):

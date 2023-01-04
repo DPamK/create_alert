@@ -245,7 +245,7 @@ class post_with_databese():
     def creat_name_item(self,name, start, end, errorType,error_type, message, replaceText):
         res = {
             'advancedTip': True,
-            'message': message,
+            'alertMessage': message,
             'alertType': 10,
             'end': end,
             'errorType': errorType,
