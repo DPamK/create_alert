@@ -22,8 +22,8 @@ def participle(sources,predicts):
         
     except:
         logger.warning('LTP can not run.')
-    allinfo = lac.run(alltexts)
-    allparts_cws,allparts_pos = lac_cwspos(allinfo)
+        allinfo = lac.run(alltexts)
+        allparts_cws,allparts_pos = lac_cwspos(allinfo)
 
     source_cws = allparts_cws[:lsource]
     source_pos = allparts_pos[:lsource]
