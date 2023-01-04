@@ -51,9 +51,9 @@ def deal_with_alert(fixed):
                 output_alert['advise'] = alert['advancedTip']
                 # output_alert['error_type'] = error_map[alert['errorType']]
                 #目前有些函数没有二级映射，先这样写,统一成str类型，后期统一了再改
-                output_alert['error_type'] = alert['error_type']
+                output_alert['error_type'] = str(error_map[alert['errorType']])
                 try:
-                    output_alert['error_type'] =str(error_map[alert['errorType']])
+                    output_alert['error_type'] = alert['error_type']
                 except:
                     print("当前alert没有error_type字段")
                     output_alert['error_type'] = ""
