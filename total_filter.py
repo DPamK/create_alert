@@ -2,74 +2,74 @@ import json
 import re
 from loguru import logger
 import cn2an
-from dictfiliter import dictfiliter,post_with_databese
+from dictfiliter import dictfiliter, post_with_databese
 from check_location import check_location
+from config import alert_config as cfg
+
 
 class total_filter():
     '''
     后处理函数
     '''
-    def __init__(self, cfg,input_content) -> None:
-        #初始化数据
-        self.alerts=input_content['alerts']#[[{}]]
-        self.data=input_content['data']#[{origin，origin_cws[],output,output_cws[]}]
 
-        #初始化配置文件
+    def __init__(self, cfg, input_content, location_structure) -> None:
+        # 初始化数据
+        self.alerts = input_content['alerts']  # [[{}]]
+        self.data = input_content['data']  # [{origin，origin_cws[],output,output_cws[]}]
+
+        # 初始化配置文件
         self.need_zhfiliter = cfg.zhfiliter
         self.need_dictfiliter = cfg.dictfiliter
         self.need_afterfiliter = cfg.afterfiliter
         self.need_afterProcess = cfg.afterProcess
-        
 
-        #初始化数据库
-        self.filiter_dbpath=cfg.filiter_dbpath
-        self.inner_db=cfg.inner_db
-        self.outer_db=cfg.outer_db
+        # 初始化数据库
+        self.filiter_dbpath = cfg.filiter_dbpath
+        self.inner_db = cfg.inner_db
+        self.outer_db = cfg.outer_db
 
-        with open(cfg.location_structure, 'r', encoding='utf8') as location_file:
-            location_structure = json.load(location_file)
-        self.location_structure=location_structure
+        self.location_structure = location_structure
 
         if self.need_dictfiliter:
             self.dfiliter = dictfiliter(cfg.filiter_dbpath)
 
-
     def filiter_alerts(self):
-        total_alert=[]
-        alerts=self.alerts
-        sentences=self.data
-        for sentence,item in zip(sentences,alerts):
+        total_alert = []
+        alerts = self.alerts
+        sentences = self.data
+        for sentence, item in zip(sentences, alerts):
             res = []  # [{}],返回形式可能需要修改
-            oritext=sentence['origin']
+            oritext = sentence['origin']
             for alert in item:
-                if not self.filiter(alert,oritext):
+                if not self.filiter(alert, oritext):
                     res.append(alert)
                 else:
                     alertmessage = alert['alertMessage']
                     logger.warning(f'delete alert {alertmessage}')
             total_alert.append(res)
-        
+
         self.alerts = total_alert
 
         return True
 
-    def filiter(self,alert,oritext):
+    def filiter(self, alert, oritext):
         # import pdb;pdb.set_trace()
         if self.need_zhfiliter and self.zh_filiter(alert):
             return True
-        if self.need_afterfiliter and self.after_filiter(alert,oritext):
+        if self.need_afterfiliter and self.after_filiter(alert, oritext):
             return True
         if self.need_dictfiliter and self.dfiliter.filter(alert):
             return True
         return False
 
     # 过滤非中文的修改
-    def zh_filiter(self,alert):
+    def zh_filiter(self, alert):
         def allChar_zh(strs):
             for _char in strs:
                 if not '\u4e00' <= _char <= '\u9fa5':
                     return False
             return True
+
         type = alert['alertType']
         sourceText = alert['sourceText']
         replaceText = alert['replaceText']
@@ -91,56 +91,56 @@ class total_filter():
         else:
             True
 
-    #后处理控制开关
-    def after_filiter(self,alert,oritext):
-        if self.exist_change_zhnum(alert,oritext=oritext):
+    # 后处理控制开关
+    def after_filiter(self, alert, oritext):
+        if self.exist_change_zhnum(alert, oritext=oritext):
             return True
-        if self.content_in_marks(alert,oritext=oritext):
+        if self.content_in_marks(alert, oritext=oritext):
             return True
         if self.fixedlack(alert):
             return True
         return False
 
-    #过滤中文改成数字
-    def exist_change_zhnum(self,alert,oritext):
-        start=alert["start"]
-        end=alert["end"]
+    # 过滤中文改成数字
+    def exist_change_zhnum(self, alert, oritext):
+        start = alert["start"]
+        end = alert["end"]
         content = oritext[start:end]
         ptnNumberCN = re.compile('([Ｏ零一二三四五六七八九十百千万亿壹贰叁肆伍陆柒捌玖拾佰仟]+)([年月日桶元圆角分])')
-        if ptnNumberCN.search(content):#不处理
+        if ptnNumberCN.search(content):  # 不处理
             return True
         return False
 
-    #过滤成对的标点符号
-    def content_in_marks(self,alert,oritext):
+    # 过滤成对的标点符号
+    def content_in_marks(self, alert, oritext):
         '''
         成对的标点符号
         '''
         ori_content = oritext
-        start=alert["start"]
+        start = alert["start"]
         content_befor = ori_content[:start]
-        mark_dict={
-            "“":"”",
-            "《":"》",
-            "（":"）",
-            "【":"】"
+        mark_dict = {
+            "“": "”",
+            "《": "》",
+            "（": "）",
+            "【": "】"
         }
-        left,right=0,0
-        for key,value in zip(mark_dict.keys(),mark_dict.values()):
-            left=content_befor.count(key)
-            right=content_befor.count(value)
-            if left>right:#不处理
+        left, right = 0, 0
+        for key, value in zip(mark_dict.keys(), mark_dict.values()):
+            left = content_befor.count(key)
+            right = content_befor.count(value)
+            if left > right:  # 不处理
                 return True
                 # item.remove(alert)
         return False
 
     # 过滤fixed与source相差巨大
-    def fixedlack(self,alert):
+    def fixedlack(self, alert):
         type = alert['alertType']
         sourceText = alert['sourceText']
         replaceText = alert['replaceText']
         if type == 4:
-            if abs(len(sourceText)-len(replaceText)) < max(3,int(len(sourceText)*0.3)):
+            if abs(len(sourceText) - len(replaceText)) < max(3, int(len(sourceText) * 0.3)):
                 return False
             else:
                 return True
@@ -150,7 +150,8 @@ class total_filter():
     '''
     下面的返回值目前是model_json
     '''
-    #过滤重复的alert
+
+    # 过滤重复的alert
     def post_disable_repeat(self):
         for sentence_errors in self.alerts:
             for alert_error in list(sentence_errors):
@@ -167,17 +168,17 @@ class total_filter():
 
         # return model_json
 
-    #针对行政区划的过滤
+    # 针对行政区划的过滤
     def post_disable_location(self):
-        model_json=check_location(self.location_structure,self.data,self.alerts)
-        self.alerts=model_json.get_alerts()
+        model_json = check_location(self.location_structure, self.data, self.alerts)
+        self.alerts = model_json.get_alerts()
 
-    #对于需要从数据库中过滤
+    # 对于需要从数据库中过滤
     def post_disable_from_database(self):
-        model_json=post_with_databese(self.data,self.alerts,self.inner_db,self.outer_db)
-        self.alerts=model_json.get_alerts()
+        model_json = post_with_databese(self.data, self.alerts, self.inner_db, self.outer_db)
+        self.alerts = model_json.get_alerts()
 
-    #无意义修改词,这个或许可以加入字典
+    # 无意义修改词,这个或许可以加入字典
     def post_disable_context(self):
         '''
         C6 无意义修改词，未按语境理解词义
@@ -196,7 +197,7 @@ class total_filter():
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #过滤公文规范
+    # 过滤公文规范
     def post_disable_gongwenguifan(self):
         '''
         可能是词库硬匹配造成的
@@ -212,7 +213,7 @@ class total_filter():
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #修改前后标点相同
+    # 修改前后标点相同
     def post_disable_space_after_puncs(self):
         '''
         "中文逗号（冒号、引号）,
@@ -225,7 +226,7 @@ class total_filter():
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #中间有空格
+    # 中间有空格
     def post_disable_space(self):
         '''
         中间有空格的会识别出错误
@@ -238,7 +239,7 @@ class total_filter():
                         sentence_errors.remove(alert_error)
         # return model_json
 
-    #阿拉伯数字转化为汉字
+    # 阿拉伯数字转化为汉字
     def post_disable_number(self):
         """
         针对C12错误：阿拉伯数组转换为汉语
@@ -262,7 +263,7 @@ class total_filter():
                         sentence_errors.remove(alert_error)
         # return model_json
 
-    #书名号
+    # 书名号
     def post_disable_bookname(self):
         """
         把书名号错误，取消处理
@@ -270,8 +271,8 @@ class total_filter():
         :return:
         """
         len_book = 50
-        for item, sentence_errors in zip(self.data,self.alerts):
-            sentence=item['origin']
+        for item, sentence_errors in zip(self.data, self.alerts):
+            sentence = item['origin']
             for alert_error in list(sentence_errors):
                 start = alert_error['start']
                 end = alert_error['end']
@@ -284,27 +285,43 @@ class total_filter():
                         break
         # return model_json
 
-    #日期错误
-    def post_disable_date(self):
-        """
-        把日期错误，取消处理
-        :param model_json:
-        :return:
-        """
-        res = []
-        for item, sentence_errors in zip(self.data,self.alerts):
+    # 日期错误
+    # def post_disable_date(self):
+    #     """
+    #     把日期错误，取消处理
+    #     :param model_json:
+    #     :return:
+    #     """
+    #     for sentence_errors in self.alerts:
+    #         for alert_error in list(sentence_errors):
+    #             if alert_error['errorType'] != 2:
+    #                 continue
+    #             s_parts = alert_error['sourceText'].split('.')
+    #             if len(s_parts) <= 2:
+    #                 is_digit = True
+    #                 for part in s_parts:
+    #                     if not part.isdigit():
+    #                         is_digit = False
+    #                 if is_digit:
+    #                     #sentence_errors.remove(alert_error)
+    #                     continue
+    #     # return model_json
+    import re
+    import json
+    def post_date(self):  # 判断日期错误
+        for item, sentence_errors in zip(self.data, self.alerts):
             input_sentence = item['origin']
             date_regular = r"[0-9]*[0-9]+[月][0-9]*[0-9]+[日]*"
-            date_search = re.search(date_regular,input_sentence)
+            date_search = re.search(date_regular, input_sentence)
             start_end = date_search.span()
             start = start_end[0]
-            end = start_end[1]
+            end = start_end[1] - 1
             date_search = date_search.group(0)
-            #print(start_end)
+            # print(start_end)
             alert = {}
-            month_dict = {1:31,2:29,3:31,4:30,5:31,6:30,7:31,8:31,9:30,10:31,11:30,12:31}
-            month = int(re.match(r"[0-9]*[0-9]+[月]",date_search).group(0).strip('月'))
-            if month>12:
+            month_dict = {1: 31, 2: 29, 3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}
+            month = int(re.match(r"[0-9]*[0-9]+[月]", date_search).group(0).strip('月'))
+            if month > 12:
                 alert["advancedTip"] = "True"
                 alert["alertMessage"] = "日期存在问题"
                 alert["alertType"] = 16
@@ -314,8 +331,8 @@ class total_filter():
                 alert["replaceText"] = ""
                 alert["sourceText"] = date_search
                 alert["start"] = start
-            day = int(re.search("[0-9]*[0-9]+日+",date_search).group(0).strip('日'))
-            if len(alert)==0 and month in month_dict.keys() and day>month_dict[month]:
+            day = int(re.search("[0-9]*[0-9]+日+", date_search).group(0).strip('日'))
+            if len(alert) == 0 and month in month_dict.keys() and day > month_dict[month]:
                 alert["advancedTip"] = "True"
                 alert["alertMessage"] = "日期存在问题"
                 alert["alertType"] = 16
@@ -325,13 +342,10 @@ class total_filter():
                 alert["replaceText"] = ""
                 alert["sourceText"] = date_search
                 alert["start"] = start
-            if len(alert)>0:
+            if len(alert) > 0:
                 sentence_errors.append(alert)
-            res.append(sentence_errors)
-        self.alerts = res
-            
 
-    #字词错误
+    # 字词错误
     def post_disable_rongyu(self):
         """
         字词错误，c13.1 和 c7类型都能处理
@@ -351,7 +365,7 @@ class total_filter():
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #法律名称不能带有书名号
+    # 法律名称不能带有书名号
     def post_disable_low(self):
         """
            删掉 法律名称简写不能使用书名号C12.4
@@ -366,7 +380,7 @@ class total_filter():
                         sentence_errors.remove(alert_error)
         # return model_json
 
-    #词序颠倒
+    # 词序颠倒
     def post_disable_reverse_words(self):
         """
         删掉  词序颠倒C6.6
@@ -377,13 +391,14 @@ class total_filter():
             for alert_error in list(sentence_errors):
                 replaceText = list(alert_error['replaceText'])
                 sourceText = list(alert_error['sourceText'])
+                errorType = alert_error['errorType']
                 replaceText.sort()
                 sourceText.sort()
-                if sourceText == replaceText:
+                if sourceText == replaceText and errorType != 667:
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #单双引号
+    # 单双引号
     # def post_disable_error_quotation(input_sentence, model_json):
     #     """
     #       单双引号
@@ -405,7 +420,7 @@ class total_filter():
     #
     #     return model_json
 
-    #过滤没有replaceText的alert
+    # 过滤没有replaceText的alert
     def post_disable_empty_replace_text(self):
         for sentence_errors in self.alerts:
             for alert_error in list(sentence_errors):
@@ -413,7 +428,7 @@ class total_filter():
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #过滤错误的quotes
+    # 过滤错误的quotes
     def post_disable_remove_error_quotes(self):
         for sentence_errors in self.alerts:
             for alert_error in list(sentence_errors):
@@ -421,15 +436,15 @@ class total_filter():
                     sentence_errors.remove(alert_error)
         # return model_json
 
-    #成对的标点符号
+    # 成对的标点符号
     def post_enable_mix_pair_symbol_detection(self):
         mix_pairs = {'（': ')', '(': '）', '［': ']', '[': '］', '｛': '}', '{': '｝', '《': '>', '<': '》'}
         english_to_chinese_pair = {"(": "（", ")": "）", "[": "［", "]": "］", "{": "｛", "}": "｝", "<": "《", ">": "》"}
         mix_pairs_inverse = {v: k for k, v in mix_pairs.items()}
         quotes_list = ['"', "'", '“', '”', '‘', '’']
 
-        for item, sentence_errors in zip(self.data,self.alerts):
-            sentence=item['origin']
+        for item, sentence_errors in zip(self.data, self.alerts):
+            sentence = item['origin']
             for alert_error in list(sentence_errors):
                 if '成对' in alert_error['alertMessage']:
                     if alert_error['sourceText'] in mix_pairs_inverse.keys():
@@ -455,14 +470,14 @@ class total_filter():
                     else:
                         sentence_errors.remove(alert_error)
 
-    def de_question(self,alert):
-        if alert['sourceText'] in ['的','地','得'] and alert['replaceText'] in ['的','地','得']:
+    def de_question(self, alert):
+        if alert['sourceText'] in ['的', '地', '得'] and alert['replaceText'] in ['的', '地', '得']:
             return True
         else:
             return False
-    
+
     def fix_deQuestion(self):
-        def fix_deProcess(alert,cws,pos):
+        def fix_deProcess(alert, cws, pos):
             start = alert['start']
             index = -1
             num = 0
@@ -474,15 +489,16 @@ class total_filter():
                     num += len(cws[i])
             if index <= 0:
                 return None
-            elif index +1 >= len(cws):
+            elif index + 1 >= len(cws):
                 alert['replaceText'] = '的'
                 return alert
             else:
-                if pos[index-1] in ['a','b','d','n','nd','nh','ni','nl','ns','nt','nz'] and pos[index+1] in ['n','nd','nh','ni','nl','ns','nt','nz']:
+                if pos[index - 1] in ['a', 'b', 'd'] and pos[index + 1] in ['n', 'nd', 'nh', 'ni', 'nl', 'ns', 'nt',
+                                                                            'nz']:
                     replace = '的'
-                elif pos[index-1] == 'v' and pos[index+1] in ['a','b','d']:
+                elif pos[index - 1] == 'v' and pos[index + 1] in ['a', 'b', 'd']:
                     replace = '得'
-                elif pos[index+1] == 'v' :
+                elif pos[index + 1] == 'v':
                     replace = '地'
                 else:
                     replace = ''
@@ -493,14 +509,15 @@ class total_filter():
                 else:
                     alert['replaceText'] = replace
                     return alert
-        total_alert=[]
-        for sentence_errors,item in zip(self.alerts,self.data):
+
+        total_alert = []
+        for sentence_errors, item in zip(self.alerts, self.data):
             res = []
             for alert_error in sentence_errors:
                 if self.de_question(alert=alert_error):
                     cws = item['origin_cws']
                     pos = item['origin_pos']
-                    temp = fix_deProcess(alert_error,cws,pos)
+                    temp = fix_deProcess(alert_error, cws, pos)
                     if temp != None:
                         temp['error_type'] = "1-12"
                         res.append(temp)
@@ -514,8 +531,8 @@ class total_filter():
         res = []
         for item in datas:
             temp = {
-                "originText":item['origin'],
-                "output":item['output']
+                "originText": item['origin'],
+                "output": item['output']
             }
             res.append(temp)
         self.data = res
@@ -525,127 +542,72 @@ class total_filter():
 
         self.switch()
         self.clean_data()
-        model_json={}
-        model_json['alerts']=self.alerts
+        model_json = {}
+        model_json['alerts'] = self.alerts
         model_json['data'] = self.data
-        model_json['errCode']=0
-        model_json['errMsg']=''
+        model_json['errCode'] = 0
+        model_json['errMsg'] = ''
         return model_json
 
     def switch(self):
         self.filiter_alerts()
         self.fix_deQuestion()
         if self.need_afterProcess:
-            self.post_disable_repeat()              #处理重复alert
-            self.post_disable_location()            #针对行政区划的过滤
-            self.post_disable_from_database()       #对于需要从数据库中过滤
-            self.post_disable_context()             #无意义修改词
-            self.post_disable_gongwenguifan()       #过滤公文规范
-            self.post_disable_space_after_puncs()   #修改前后标点相同
-            self.post_disable_space()               #中间有空格
-            self.post_disable_number()              #阿拉伯数字转化为汉字
-            self.post_disable_bookname()            #把书名号错误，取消处理
-            # self.post_disable_date()                #把日期错误，取消处理
-            self.post_disable_rongyu()              #冗余字词错误
-            self.post_disable_low()                 #法律名称不能带有书名号
-            self.post_disable_reverse_words()       #词序颠倒
-            self.post_disable_empty_replace_text()  #过滤没有replaceText的alert
-            self.post_disable_remove_error_quotes() #过滤错误的quotes
-            self.post_enable_mix_pair_symbol_detection()#成对的标点符号
+            self.post_disable_repeat()  # 处理重复alert
+            self.post_disable_reverse_words()  # 词序颠倒，其会过滤人名错误，代码中加了限制，为了防止其过滤其他后处理生成的错误，放在第一个
+            self.post_disable_location()  # 针对行政区划的过滤
+            self.post_disable_from_database()  # 对于需要从数据库中过滤
+            self.post_disable_context()  # 无意义修改词
+            self.post_disable_gongwenguifan()  # 过滤公文规范
+            self.post_disable_space_after_puncs()  # 修改前后标点相同
+            self.post_disable_space()  # 中间有空格
+            self.post_disable_number()  # 阿拉伯数字转化为汉字
+            self.post_disable_bookname()  # 把书名号错误，取消处理
+            self.post_disable_empty_replace_text()  # 过滤没有replaceText的alert,日期错误目前没有replaceText，将其放在前面
+            self.post_date()  # 处理日期错误
+            self.post_disable_rongyu()  # 冗余字词错误
+            self.post_disable_low()  # 法律名称不能带有书名号
+            self.post_disable_remove_error_quotes()  # 过滤错误的quotes
+            self.post_enable_mix_pair_symbol_detection()  # 成对的标点符号
 
 
 if __name__ == '__main__':
-    inputCont={
-    "alerts": [
-        [
-            {
-                "advancedTip": "True",
-                "alertMessage": "建议用“审计组已”替换“审计组己”",
-                "alertType": 4,
-                "end": 5,
-                "errorType": 1,
-                "replaceText": "审计组已",
-                "sourceText": "审计组己",
-                "start": 2
-            }
-        ]
-    ],
-    "data": [
-        {
-            "origin": "相关审计组己开展了对州财政局、州地税局、国库、州民政局、州农委等九个部门预算执行情况进行审计和审计调查。",
-            "origin_cws": [
-                "相关",
-                "审计",
-                "组己",
-                "开展",
-                "了",
-                "对州",
-                "财政局",
-                "、",
-                "州",
-                "地税局",
-                "、",
-                "国库",
-                "、",
-                "州",
-                "民政局",
-                "、",
-                "州",
-                "农委",
-                "等",
-                "九",
-                "个",
-                "部门",
-                "预算",
-                "执行",
-                "情况",
-                "进行",
-                "审计",
-                "和",
-                "审计",
-                "调查",
-                "。"
-            ],
-            "origin_pos": [
-                "v",
-                "v",
-                "v",
-                "v",
-                "u",
-                "ns",
-                "n",
-                "wp",
-                "n",
-                "j",
-                "wp",
-                "n",
-                "wp",
-                "n",
-                "n",
-                "wp",
-                "n",
-                "j",
-                "u",
-                "m",
-                "q",
-                "n",
-                "n",
-                "v",
-                "n",
-                "v",
-                "v",
-                "c",
-                "v",
-                "v",
-                "wp"
+    inputCont = {
+        "alerts": [
+            [
+                {
+                    "advancedTip": "True",
+                    "alertMessage": "日期”",
+                    "alertType": 4,
+                    "end": 2,
+                    "errorType": 0,
+                    "replaceText": "",
+                    "sourceText": "2022年13月32日",
+                    "start": 0
+                }
             ]
-        }
-    ],
-    "errCode": 0,
-    "errMsg": ""
-}
-    # filiter=total_filter(input_content=inputCont,cfg=cfg)
-    # print(filiter.get_alerts())
+        ],
+        "data": [
+            {
+                "origin": "2022年13月32日。",
+                "output": "2022年月日。",
+                "origin_cws": [
+                    "2022年13月32日",
+                    "。"
+                ],
+                "origin_pos": [
+                    "date",
+                    "wp"
+                ]
+            }
+        ],
+        "errCode": 0,
+        "errMsg": ""
+    }
+    with open(cfg.location_structure, 'r', encoding='utf8') as location_file:
+        location_structure = json.load(location_file)
+    filiter = total_filter(input_content=inputCont, cfg=cfg, location_structure=location_structure)
+    print(filiter.get_alerts())
 
 
 

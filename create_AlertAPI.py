@@ -8,6 +8,9 @@ from transfer import deal_with_alert
 from total_filter import total_filter
 from config import alert_config as cfg
 from word_cut import lac_cwspos,ltp_cwspos
+import json
+with open(cfg.location_structure, 'r', encoding='utf8') as location_file:
+    location_structure = json.load(location_file)
 
 logger.add("log/alert_log.log")
 app = Flask(__name__)
@@ -132,11 +135,10 @@ def catch_alert():
     # pipeline
     alert_info = create_alerts(sources=sources,predicts=fixeds)
     if fliter_cfg != None:
-        filiter = total_filter(cfg=fliter_cfg,input_content=alert_info)
+        filiter = total_filter(cfg=fliter_cfg,input_content=alert_info,location_structure=location_structure)
         alert_info = filiter.get_alerts()
 
     if result_style == 'correct':
-        
         return alert_info
     elif result_style == 'transfer':
         result = deal_with_alert(alert_info['alerts'])
