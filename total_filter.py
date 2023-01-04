@@ -545,7 +545,7 @@ class total_filter():
             self.post_disable_space()               #中间有空格
             self.post_disable_number()              #阿拉伯数字转化为汉字
             self.post_disable_bookname()            #把书名号错误，取消处理
-            self.post_disable_date()                #把日期错误，取消处理
+            # self.post_disable_date()                #把日期错误，取消处理
             self.post_disable_rongyu()              #冗余字词错误
             self.post_disable_low()                 #法律名称不能带有书名号
             self.post_disable_reverse_words()       #词序颠倒

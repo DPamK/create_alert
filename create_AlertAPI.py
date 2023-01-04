@@ -38,7 +38,6 @@ def list2str(strlist):
 def create_alerts(sources,predicts):
     alerts = []
     datas = []
-    error_type = ""
     inputs,outputs,errCode,errMsg,source_poss = participle(sources,predicts)
     for source,output,predict,source_pos in zip(inputs,outputs,predicts,source_poss):
         alert = []
@@ -53,6 +52,7 @@ def create_alerts(sources,predicts):
                 replacelist = output[out_pos_begin: out_pos_end]
                 replaceText = list2str(replacelist)
                 alertMessage = ""
+                error_type = ""
                 alertType,errorType = -1,-1
                 start = sum(textlenth[:ori_pos_begin])
                 
