@@ -7,6 +7,9 @@ from transfer import deal_with_alert
 from total_filter import total_filter
 from config import alert_config as cfg
 from word_cut import lac_cwspos,ltp_cwspos
+import json
+with open(cfg.location_structure, 'r', encoding='utf8') as location_file:
+    location_structure = json.load(location_file)
 
 logger.add("log/alert_log.log")
 app = Flask(__name__)
@@ -47,7 +50,6 @@ def error_info_json(errorindex):
 def create_alerts(sources,predicts):
     alerts = []
     datas = []
-    error_type = ""
     inputs,outputs,errCode,errMsg,source_poss = participle(sources,predicts)
     if errCode == 0:
         for source,output,predict,source_pos in zip(inputs,outputs,predicts,source_poss):
@@ -115,7 +117,8 @@ def create_alerts(sources,predicts):
         'errMsg':errMsg
     }
     return result
-# import pdb;pdb.set_trace()
+
+
 @app.route('/alert',methods=['POST'])
 def catch_alert():
     # 设定请求需求
@@ -154,6 +157,7 @@ def catch_alert():
             return result
         else:
             return {'error':f'request_info:{result_style} not exist'}
+
     else:
         result = error_info_json(alert_info['errCode'])
         return result

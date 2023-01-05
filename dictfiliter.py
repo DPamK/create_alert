@@ -187,19 +187,20 @@ class post_with_databese():
 
     #人名
     def post_disable_nobody(self):
-        for item, sentence_errors in zip(self.data,self.alerts):
-            sentence=item['origin']
-            origin_cws=item['origin_cws']
-            origin_pos=item['origin_pos']
-            num = 0
-            names = self.extract_name(sentence=sentence,origin_cws=origin_cws,origin_pos=origin_pos)
+        for item, sentence_errors in zip(self.data, self.alerts):
+            sentence = item['origin']
+            origin_cws = item['origin_cws']
+            origin_pos = item['origin_pos']
+            names = self.extract_name(sentence=sentence, origin_cws=origin_cws, origin_pos=origin_pos)
             for name, start, end in names:
                 left_border = start - 10 if start - 10 > 0 else 0
                 right_border = end + 4
                 try:
-                    errorType,error_type, message, hit_position, replaceText =self.judge_exit(name, sentence[left_border:right_border],
-                                                                            self.leader_name_set,
-                                                                            self.leader_position_set, self.leader_position_dict)
+                    errorType, error_type, message, hit_position, replaceText = self.judge_exit(name, sentence[
+                                                                                                      left_border:right_border],
+                                                                                                self.leader_name_set,
+                                                                                                self.leader_position_set,
+                                                                                                self.leader_position_dict)
 
                     for alert_error in list(sentence_errors):
                         if name in str(alert_error['sourceText']).strip() and alert_error['errorType'] != errorType:
@@ -210,11 +211,13 @@ class post_with_databese():
                                     sentence_errors.remove(alert_error)
 
                     if replaceText != "":  # 领导人名字写错的时候为空
-                        new_item = self.creat_name_item(name, start, end, errorType,error_type, message, replaceText)
+                        new_item = self.creat_name_item(name, start, end, errorType, error_type, message, replaceText)
                         for alert_error in sentence_errors:
-                            if name in alert_error['sourceText'] and "，" in alert_error["sourceText"]:  # sourceText中有人名和逗
-                                alert_error["alertMessage"] = alert_error["alertMessage"].replace(alert_error['sourceText'],
-                                                                                                name)
+                            if name in alert_error['sourceText'] and "，" in alert_error[
+                                "sourceText"]:  # sourceText中有人名和逗
+                                alert_error["alertMessage"] = alert_error["alertMessage"].replace(
+                                    alert_error['sourceText'],
+                                    name)
                                 alert_error["sourceText"] = name
                             elif name == alert_error['sourceText']:  # sourceText和人名完全相等
                                 alert_error = new_item
@@ -222,12 +225,9 @@ class post_with_databese():
 
                 except Exception as ex:
                     print(ex)
-                    num += 1
-                    print(num)
-
         # return model_json
 
-    def extract_name(self,sentence: str,origin_cws,origin_pos):
+    def extract_name(self, sentence: str, origin_cws, origin_pos):
         namelist = []
         current_pos = 0
         for token, label in zip(origin_cws, origin_pos):
@@ -241,29 +241,27 @@ class post_with_databese():
             current_pos += len(token)
         return namelist
 
-
-    def creat_name_item(self,name, start, end, errorType,error_type, message, replaceText):
+    def creat_name_item(self, name, start, end, errorType, error_type, message, replaceText):
         res = {
             'advancedTip': True,
             'alertMessage': message,
             'alertType': 10,
             'end': end,
             'errorType': errorType,
-            'error_type':error_type,
+            'error_type': error_type,
             'replaceText': replaceText,
             'sourceText': name,
             'start': start
         }
         return res
 
-
-    def judge_exit(self,name_o, string_before_name, name_set, position_set, leader_position_dict):
+    def judge_exit(self, name_o, string_before_name, name_set, position_set, leader_position_dict):
         leader_position_list = leader_position_dict[name_o] if name_o in name_set else []
         hit_position = ''
         replaceText = ''
         for position in position_set:
             if position in string_before_name:  # 句子前面有职务
-                print(position)
+                # print(position)
                 hit_position = position
                 for leader_position in leader_position_list:
                     if leader_position in string_before_name:  # 句子前面的职务正确
@@ -271,24 +269,23 @@ class post_with_databese():
                         error_type = '-'
                         message = "领导职务，请谨慎查验"
                         replaceText = name_o
-                        return errorType,error_type, message, hit_position, replaceText
+                        return errorType, error_type, message, hit_position, replaceText
                 if len(leader_position_list) > 0:  # 职务不正确：李克强总书记
                     errorType = 201
                     error_type = "2-1"
                     message = "职务可能有误，建议修改为:" + '、'.join(set(leader_position_list))
                     replaceText = name_o
-                    return errorType,error_type,message, hit_position, replaceText
+                    return errorType, error_type, message, hit_position, replaceText
                 elif len(leader_position_list) == 0:  # 人名不正确：习进平总书记
                     erroType = 201
                     error_type = "2-2"
                     message = "领导人名可能有误"
-
-                    return erroType,error_type, message, hit_position, replaceText
+                    return erroType, error_type, message, hit_position, replaceText
         errorType = 667  # 句子没有职务：张海波
         error_type = "-"
         message = "人名，请谨慎查验"
         replaceText = name_o
-        return errorType,error_type, message, hit_position, replaceText
+        return errorType, error_type, message, hit_position, replaceText
 
 
     def post_disable_by_black_words(self):
