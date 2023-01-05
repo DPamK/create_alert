@@ -296,6 +296,9 @@ class total_filter():
             input_sentence = item['origin']
             date_regular = r"[0-9]*[0-9]+[月][0-9]*[0-9]+[日]*"
             date_search = re.search(date_regular,input_sentence)
+            if date_search == None:
+                res.append(sentence_errors)
+                continue
             start_end = date_search.span()
             start = start_end[0]
             end = start_end[1]
